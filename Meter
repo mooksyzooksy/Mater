@@ -1,0 +1,162 @@
+package com.mycompany.shared.metrics;
+
+import io.micrometer.core.instrument.Counter;
+import io.micrometer.core.instrument.Gauge;
+import io.micrometer.core.instrument.MeterRegistry;
+import io.micrometer.core.instrument.Tag;
+import io.micrometer.core.instrument.Timer;
+
+import java.time.Duration;
+import java.util.ArrayList;
+import java.util.List;
+import java.util.concurrent.TimeUnit;
+import java.util.concurrent.atomic.AtomicLong;
+import java.util.function.Supplier;
+
+public class MetricsSupport {
+
+    private final MeterRegistry registry;
+
+    public MetricsSupport(final MeterRegistry registry) {
+        this.registry = registry;
+    }
+
+    public CounterBuilder counter(final String name) {
+        return new CounterBuilder(registry, name);
+    }
+
+    public TimerBuilder timer(final String name) {
+        return new TimerBuilder(registry, name);
+    }
+
+    public <T extends Number> void gauge(
+            final String name,
+            final Supplier<T> supplier,
+            final Tag... tags
+    ) {
+
+        Gauge.builder(name, supplier)
+                .tags(List.of(tags))
+                .register(registry);
+    }
+
+    public static final class CounterBuilder {
+
+        private final MeterRegistry registry;
+        private final String name;
+
+        private final List<Tag> tags = new ArrayList<>();
+
+        private String description;
+
+        private CounterBuilder(
+                final MeterRegistry registry,
+                final String name
+        ) {
+            this.registry = registry;
+            this.name = name;
+        }
+
+        public CounterBuilder description(final String description) {
+            this.description = description;
+            return this;
+        }
+
+        public CounterBuilder tag(
+                final String key,
+                final String value
+        ) {
+            this.tags.add(Tag.of(key, value));
+            return this;
+        }
+
+        public Counter register() {
+
+            final Counter.Builder builder = Counter.builder(name)
+                    .tags(tags);
+
+            if (description != null) {
+                builder.description(description);
+            }
+
+            return builder.register(registry);
+        }
+
+        public void increment() {
+            register().increment();
+        }
+
+        public void increment(final double amount) {
+            register().increment(amount);
+        }
+    }
+
+    public static final class TimerBuilder {
+
+        private final MeterRegistry registry;
+        private final String name;
+
+        private final List<Tag> tags = new ArrayList<>();
+
+        private String description;
+
+        private Duration sla;
+
+        private TimerBuilder(
+                final MeterRegistry registry,
+                final String name
+        ) {
+            this.registry = registry;
+            this.name = name;
+        }
+
+        public TimerBuilder description(final String description) {
+            this.description = description;
+            return this;
+        }
+
+        public TimerBuilder sla(final Duration sla) {
+            this.sla = sla;
+            return this;
+        }
+
+        public TimerBuilder tag(
+                final String key,
+                final String value
+        ) {
+            this.tags.add(Tag.of(key, value));
+            return this;
+        }
+
+        public Timer register() {
+
+            final Timer.Builder builder = Timer.builder(name)
+                    .tags(tags);
+
+            if (description != null) {
+                builder.description(description);
+            }
+
+            if (sla != null) {
+                builder.serviceLevelObjectives(sla);
+            }
+
+            return builder.register(registry);
+        }
+
+        public void record(final Runnable runnable) {
+            register().record(runnable);
+        }
+
+        public <T> T record(final Supplier<T> supplier) {
+            return register().record(supplier);
+        }
+
+        public void record(
+                final long amount,
+                final TimeUnit unit
+        ) {
+            register().record(amount, unit);
+        }
+    }
+}
